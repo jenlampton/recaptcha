@@ -67,3 +67,28 @@ function recaptcha_update_1001() {
   $config->set('noscript', 0);
   $config->save();
 }
+
+/**
+ * Rename lagacy recaptcha challange type.
+ */
+function recaptcha_update_1002() {
+  $config = config('recaptcha.settings');
+
+  // Update ReCaptcha settings: change type name for legacy recaptcha.
+  if ($config->get('type') == 'reCAPTCHA') {
+    $config->set('type', 'reCAPTCHA v2 Checkbox');
+    $config->save();
+  }
+
+  // Update captcha settings: change type name for legacy recaptcha.
+  $captcha_points = config_get('captcha.settings', 'captcha_points');
+  if (!empty($captcha_points)) {
+    foreach ($captcha_points as $point => $settings) {
+      if ($settings['captcha_type'] == 'reCAPTCHA') {
+        $captcha_points[$point]['captcha_type'] = 'reCAPTCHA v2 Checkbox';
+      }
+    }
+    config_set('captcha.settings', 'captcha_points', $captcha_points);
+  }
+}
+

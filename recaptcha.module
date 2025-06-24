@@ -68,65 +68,106 @@ function recaptcha_captcha($op, $captcha_type = '') {
 
   switch ($op) {
     case 'list':
-      return array('reCAPTCHA');
+      return array(
+        'reCAPTCHA v2 Checkbox',
+        'reCAPTCHA v2 Invisible',
+      );
 
     case 'generate':
       $captcha = array();
-      if ($captcha_type == 'reCAPTCHA') {
+      if ($captcha_type == 'reCAPTCHA v2 Checkbox' || $captcha_type == 'reCAPTCHA v2 Invisible') {
         $recaptcha_site_key = $config->get('site_key');
         $recaptcha_secret_key = $config->get('secret_key');
-
+        // Build the reCAPTCHA captcha form if site_key and secret_key are
+        // configured.
         if (!empty($recaptcha_site_key) && !empty($recaptcha_secret_key)) {
-          // Build the reCAPTCHA captcha form if site_key and secret_key are
-          // configured. Captcha requires TRUE to be returned in solution.
+          // Captcha requires TRUE to be returned in 'solution'. Base captcha
+          // module will compare the returned value to this expected solution.
           $captcha['solution'] = TRUE;
-          $captcha['captcha_validate'] = 'recaptcha_captcha_validation';
+          // Use this form element to hold the computed value.
           $captcha['form']['captcha_response'] = array(
             '#type' => 'hidden',
             '#value' => 'Google no captcha',
           );
 
-          $noscript = '';
-          if ($config->get('noscript')) {
-            $variables = array(
-              'sitekey' => $recaptcha_site_key,
-              'language' => $language->langcode,
+          if ($captcha_type == 'reCAPTCHA v2 Checkbox') {
+            // Add a validation method to update the value on submit.
+            $captcha['captcha_validate'] = 'recaptcha_captcha_validation';
+
+            $noscript = '';
+            if ($config->get('noscript')) {
+              $variables = array(
+                'sitekey' => $recaptcha_site_key,
+                'language' => $language->langcode,
+              );
+              $noscript = theme('recaptcha_widget_noscript', array('widget' => $variables));
+            }
+
+            $attributes = array(
+              'class' => 'g-recaptcha',
+              'data-sitekey' => $recaptcha_site_key,
+              'data-theme' => $config->get('theme'),
+              'data-type' => $config->get('type'),
+              'data-size' => $config->get('size'),
+              'data-tabindex' => $config->get('tabindex'),
             );
-            $noscript = theme('recaptcha_widget_noscript', array('widget' => $variables));
+            // Filter out empty tabindex/size.
+            $attributes = array_filter($attributes);
+
+            $captcha['form']['recaptcha_widget'] = array(
+              '#markup' => '<div' . backdrop_attributes($attributes) . '></div>',
+              '#suffix' => $noscript,
+            );
           }
+          elseif ($captcha_type == 'reCAPTCHA v2 Invisible') {
+            $attributes = array(
+              'class' => 'g-recaptcha',
+              'data-sitekey' => $recaptcha_site_key,
+              'data-callback' => 'recaptchaOnSubmit',
+              'data-size' => 'invisible',
+            );
+            $captcha['form']['recaptcha_element'] = array(
+              '#markup' => '<div' . backdrop_attributes($attributes) . '>Invisible</div>',
+            );
 
-          $attributes = array(
-            'class' => 'g-recaptcha',
-            'data-sitekey' => $recaptcha_site_key,
-            'data-theme' => $config->get('theme'),
-            'data-type' => $config->get('type'),
-            'data-size' => $config->get('size'),
-            'data-tabindex' => $config->get('tabindex'),
-          );
-          // Filter out empty tabindex/size.
-          $attributes = array_filter($attributes);
-
-          $captcha['form']['recaptcha_widget'] = array(
-            '#markup' => '<div' . backdrop_attributes($attributes) . '></div>',
-            '#suffix' => $noscript,
-          );
-
-          // @todo: backdrop-issue 2877 Backdrop does not yet support "async"
-          backdrop_add_js(
-            url('https://www.google.com/recaptcha/api.js', array('query' => array('hl' => $language->langcode), 'absolute' => TRUE)),
-            array(
-              'defer' => TRUE,
-              'attributes' => array('async' => 'async'),
-              'type' => 'external',
-              'cache' => FALSE
-            )
-          );
+            $script = "
+              function recaptchaOnSubmit(token) {
+                console.log('success!');
+                // @todo How to Submit this form now?
+              }
+              function recaptchaOnload() {
+                grecaptcha.render('edit-submit', {
+                  'sitekey' : '$recaptcha_site_key',
+                  'callback' : recaptchaOnSubmit,
+                  'size': 'invisible',
+                });
+              }";
+            backdrop_add_js($script, 'inline');
+          }
         }
-        else {
-          // Fallback to Math captcha as reCAPTCHA is not configured.
-          $captcha = captcha_captcha('generate', 'Math');
-        }
+
+        // @todo: backdrop-issue 2877 Backdrop does not yet support "async"
+        backdrop_add_js(
+          url('https://www.google.com/recaptcha/api.js', array(
+            'query' => array(
+              'onload' => 'recaptchaOnload',
+              'hl' => $language->langcode,
+            ),
+            'absolute' => TRUE,
+          )),
+          array(
+            'defer' => TRUE,
+            'attributes' => array('async' => 'async'),
+            'type' => 'external',
+            'cache' => FALSE
+          )
+        );
       }
+      else {
+        // Fallback to Math captcha as reCAPTCHA is not configured.
+        $captcha = captcha_captcha('generate', 'Math');
+      }
+
       return $captcha;
   }
 }
@@ -136,8 +177,8 @@ function recaptcha_captcha($op, $captcha_type = '') {
  */
 function recaptcha_captcha_validation($solution, $response, $element, $form_state) {
 
-  //Load third-party reCaptcha library
-  //plus our custom RequestMethod
+  // Load third-party reCaptcha library
+  // plus our custom RequestMethod
   module_load_include('php', 'recaptcha', 'recaptcha-php/src/autoload');
   module_load_include('php', 'recaptcha', 'src/ReCaptcha/RequestMethod/BackdropPost');
 

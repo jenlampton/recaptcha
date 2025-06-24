@@ -11,6 +11,24 @@
 function recaptcha_admin_settings() {
   $config = config('recaptcha.settings');
 
+  // Add some assistance around safe secret key handling.
+  $config_secret_key = $config->get('secret_key');
+  $secret_description = t('The secret key given to you when you <a href="@url">register for reCAPTCHA</a>. For security, place this key in<code>settings.local.php</code> instead of this location.', array('@url' => 'http://www.google.com/recaptcha/admin'));
+  if ($config_secret_key !== '') {
+    $message = t('The ReCaptcha <strong>secret key</strong> is saved in configuration. For security, please remove it from this form, and add it to <code>$settings[' . "'recaptcha_secret_key'" . ']</code> in <code>settings.local.php</code>.');
+    backdrop_set_message($message, 'warning');
+  }
+  else {
+    $recaptcha_secret_key = settings_get('recaptcha_secret_key', FALSE);
+    if (!$recaptcha_secret_key) {
+      $message = t('No ReCaptcha <strong>secret key</strong> was found in either <code>$settings</code> or configuration.');
+      backdrop_set_message($message, 'error');
+    }
+    else {
+      $secret_description = t('A secret key was successfully located in <code>$settings</code>.');
+    }
+  }
+
   $form = array();
 
   $help = t('Google <a href="@url">reCAPTCHA</a> is a free service to protect your website from spam and abuse. reCAPTCHA uses an advanced risk analysis engine and adaptive CAPTCHAs to keep automated software from engaging in abusive activities on your site. It does this while letting your valid users pass through with ease.', array('@url' => 'https://www.google.com/recaptcha'));
@@ -33,10 +51,9 @@ function recaptcha_admin_settings() {
   $form['recaptcha_general_settings']['recaptcha_secret_key'] = array(
     '#type' => 'textfield',
     '#title' => t('Secret key'),
-    '#default_value' => $config->get('secret_key'),
+    '#default_value' => $config_secret_key,
     '#maxlength' => 40,
-    '#description' => t('The secret key given to you when you <a href="@url">register for reCAPTCHA</a>.', array('@url' => 'http://www.google.com/recaptcha/admin')),
-    '#required' => TRUE,
+    '#description' => $secret_description,
   );
   $form['recaptcha_widget_settings'] = array(
     '#type' => 'fieldset',
